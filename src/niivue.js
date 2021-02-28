@@ -9,7 +9,7 @@ import { vertFontShader, fragFontShader } from "./shader-srcs.js";
 
 import {bus} from "@/bus.js"
 
-export var textHeight = 0.0; //0 for no text, fraction of canvas height
+export var textHeight = 0.2; //0 for no text, fraction of canvas height
 export var colorbarHeight = 0.05; //0 for no colorbars, fraction of NIfTI j dimension
 export var crosshairWidth = 1; //0 for no crosshairs, pixels
 export var backColor =  [0, 0, 0, 1];
@@ -18,7 +18,7 @@ export const sliceTypeCoronal = 1;
 export const sliceTypeSagittal = 2;
 export const sliceTypeMultiplanar = 3;
 export const sliceTypeRender = 4;
-export var sliceType = sliceTypeMultiplanar; //view: axial, coronal, sagittal, multiplanar or render
+export var sliceType = sliceTypeAxial; //view: axial, coronal, sagittal, multiplanar or render
 export var renderAzimuth = 120;
 export var renderElevation = 15;
 
@@ -35,7 +35,7 @@ var lineShader = null //program for cross-hairs
 var renderShader = null //program for 3D views
 var colorbarShader = null //program for 3D views
 var fontShader = null //program for displaying text
-var fontMetrics = null //position/height/width of each character in font texture
+var fontMets = null; //position/height/width of each character in font texture
 var mousePos = [0,0];
 var numScreenSlices = 0; //e.g. for multiplanar view, 3 simultaneous slices: axial, coronal, sagittal
 var screenSlices = [ //location and type of each 2D slice on screen, allows clicking to detect position
@@ -124,7 +124,6 @@ export function calibrateIntensity(A, overlayItem) {
 	}
 	//calibrate intensity
 	if ((isFinite(volume.hdr.scl_slope)) && (isFinite(volume.hdr.scl_inter)) && (volume.hdr.scl_slope !== 0.0)) {
-		//console.log(">> mn %f mx %f %f %f", mn, mx, hdr.scl_slope, hdr.scl_inter);
 		mn = (mn * volume.hdr.scl_slope) + volume.hdr.scl_inter;
 		mx = (mx * volume.hdr.scl_slope) + volume.hdr.scl_inter;
 	} else {
@@ -177,10 +176,8 @@ export function loadVolume(overlayItem) {
 var loadFont = function(gl, pngName) {
 	var pngImage = null;
 	pngImage = new Image();
-	console.log('loading ', pngName);
-	pngImage.src = pngName;  // MUST BE SAME DOMAIN!!!
 	pngImage.onload = function() {
-		//console.log('matcap resolution ', matCapImage.width, '<<<', matCapImage.height);
+		console.log(">>>PNG resolution ", pngImage.width, ",", pngImage.height);
 		var pngTexture = gl.createTexture();
 		gl.activeTexture(gl.TEXTURE3);
 		gl.bindTexture(gl.TEXTURE_2D, pngTexture);
@@ -192,7 +189,9 @@ var loadFont = function(gl, pngName) {
 		// Upload the image into the texture.
 		gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, pngImage);
 	}
-} // selectJpeg()
+	pngImage.src = pngName;  // MUST BE SAME DOMAIN!!!
+	console.log("loading PNG ", pngName);
+} // loadFont()
 
 export function init(gl) {
 	//initial setup: only at the startup of the component
@@ -212,9 +211,41 @@ export function init(gl) {
 	fontShader = new Shader(gl, vertFontShader, fragFontShader);
 	fontShader.use(gl);
 	gl.uniform1i(fontShader.uniforms["fontTexture"], 3);
-	fontMetrics = require('./Roboto.json');
+	let fontMetrics = require('./Roboto.json');
 	loadFont(gl, fontMetrics.pages[0]);
 	console.log(fontMetrics);
+	let base = fontMetrics.common.base;
+    let scaleW = fontMetrics.common.scaleW;
+    let scaleH = fontMetrics.common.scaleH;
+	fontMets = [];
+	for (let id = 0; id < 256; id++) { //clear ASCII codes 0..256
+		fontMets[id] = {};
+		fontMets[id].x = 0;
+        fontMets[id].y = 0;
+        fontMets[id].w = 0;
+        fontMets[id].h = 0;
+        fontMets[id].xo = 0;
+        fontMets[id].yo = 0;
+        fontMets[id].xadv = 0; //critical to set: font format omits non-graphical characters (e.g. DEL): we skip characters whete X-advance = 0
+        fontMets[id].xEnd = 0;
+        fontMets[id].yEnd = 0;
+	}
+	//load raw values: may only sparsely describe range 0..255
+	for (var i = 0; i < fontMetrics.chars.length; i++) { //clear ASCII codes 0..256
+		let id = fontMetrics.chars[i].id;
+		fontMets[id].x = fontMetrics.chars[i].x / scaleW;
+		fontMets[id].y = fontMetrics.chars[i].y / scaleH;
+		fontMets[id].w = fontMetrics.chars[i].width;
+		fontMets[id].h = fontMetrics.chars[i].height;
+		fontMets[id].xo = fontMetrics.chars[i].xoffset;
+		fontMets[id].xadv = fontMetrics.chars[i].xadvance;
+		//normalize from pixels to 0..1
+		fontMets[id].yo = base - (fontMets[id].h + fontMetrics.chars[i].yoffset);
+		fontMets[id].xEnd = fontMets[id].x + (fontMets[id].w / scaleW);
+		fontMets[id].yEnd = fontMets[id].y + (fontMets[id].h / scaleH);
+    }
+	var bytes = new Buffer("R");
+	console.log("fontMets loaded", fontMets[bytes[0]]);	
 } // init()
 
 export function updateGLVolume(gl, overlayItem) { //load volume or change contrast
@@ -376,13 +407,13 @@ function drawColorbar(gl, leftTopWidthHeight) {
 
 function drawTextRight(gl, xy, char) { //to right of x, vertically centered on y
 	if (textHeight <= 0) return;
-	lineShader.use(gl)
-	gl.uniform4fv(lineShader.uniforms["lineColor"], crosshairColor);
-	gl.uniform2fv(lineShader.uniforms["canvasWidthHeight"], [gl.canvas.width, gl.canvas.height]);
+	fontShader.use(gl)
+	gl.uniform2fv(fontShader.uniforms["canvasWidthHeight"], [gl.canvas.width, gl.canvas.height]);
 	let y = (textHeight * gl.canvas.height);
 	let x = y;
 	console.log("drawText", char);
-	gl.uniform4f(lineShader.uniforms["leftTopWidthHeight"], xy[0], xy[1]- (0.5 * y), x, y);
+	console.log(">>fontMetrics", fontMets[char[3]]);
+	gl.uniform4f(fontShader.uniforms["leftTopWidthHeight"], xy[0], xy[1]- (0.5 * y), x, y);
 	gl.drawArrays(gl.TRIANGLE_STRIP, 5, 4);
 }
 
@@ -452,7 +483,6 @@ function draw3D(gl, overlayItem) {
 	if (Math.abs(rayDir[0]) < tiny) rayDir[0] = tiny;
 	if (Math.abs(rayDir[1]) < tiny) rayDir[1] = tiny;
 	if (Math.abs(rayDir[2]) < tiny) rayDir[2] = tiny;
-	//console.log( ">>", renderAzimuth, " : ", renderElevation, ">>>> ", rayDir);
 	//gl.disable(gl.DEPTH_TEST);
 	//gl.enable(gl.CULL_FACE);
 	//gl.cullFace(gl.FRONT);
@@ -519,7 +549,7 @@ export function drawSlices(gl, overlayItem) {
 		let hY = ltwh[3] * volScale[1]/(volScale[1]+volScale[2]);
 		let hZ = ltwh[3] - hY;
 		//draw axial
-		draw2D(gl, [ltwh[0],ltwh[1]+hY, wX, hY], 0);
+		draw2D(gl, [ltwh[0],ltwh[1]+hZ, wX, hY], 0);
 		//draw coronal
 		draw2D(gl, [ltwh[0],ltwh[1], wX, hZ], 1);
 		//draw sagittal

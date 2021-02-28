@@ -172,7 +172,6 @@ export var vertFontShader =
 `#version 300 es
 #line 174
 layout(location=0) in vec3 pos;
-layout(location = 1) in vec2 iUV;
 uniform vec2 canvasWidthHeight;
 uniform vec4 leftTopWidthHeight;
 out vec2 vUV;
@@ -183,7 +182,7 @@ void main(void) {
 	frac.y = 1.0 - ((leftTopWidthHeight.y + ((1.0 - pos.y) * leftTopWidthHeight.w)) / canvasWidthHeight.y); //1..0
 	frac = (frac * 2.0) - 1.0;
 	gl_Position = vec4(frac, 0.0, 1.0);
-	vUV = iUV;
+	vUV = pos.xy;
 }`;
 
 export var fragFontShader =
@@ -199,6 +198,8 @@ float median(float r, float g, float b) {
 }
 void main() {
 	color = vec4(vUV.xy, 0.0, 1.0);
+	//color = vec4(vUV.xy, 0.0, 1.0); return;
+	color.rgb = texture(fontTexture, vUV).rgb; return;
     vec3 clr = 1.0 - texture(fontTexture, vUV).rgb;
 	float sigDist = median(clr.r, clr.g, clr.b) - 0.5;
     float opacity = clamp(sigDist/fwidth(sigDist) + 0.5, 0.0, 1.0);
