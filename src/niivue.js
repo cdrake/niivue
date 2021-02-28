@@ -173,19 +173,6 @@ export function loadVolume(overlayItem) {
 	return
 } // loadVolume()
 
-var loadFontMetrics = async function() {
-	let fontMetrics = [];
-	fetch("./Roboto.json")
-	.then(r => r.json())
-	.then(json => {
-		fontMetrics=json;
-	},
-	response => {
-		console.log('Error loading json:', response)
-	});
-	return fontMetrics;
-}
-	
 var loadFont = function(gl, pngName) {
 	var pngImage = null;
 	pngImage = new Image();
@@ -224,9 +211,14 @@ export async function init(gl) {
 	fontShader = new Shader(gl, vertFontShader, fragFontShader);
 	fontShader.use(gl);
 	gl.uniform1i(fontShader.uniforms["fontTexture"], 3);
-	let fontMetrics =  await loadFontMetrics();
-	//let fontMetrics = require('../public/Roboto.json');
-	console.log(fontMetrics);
+	var fontMetrics = [];
+	async function fetchJSON() {
+		const response = await fetch('./Roboto.json');
+		fontMetrics = await response.json();
+		console.log('<<<',fontMetrics);
+	}
+	await fetchJSON();
+	console.log('>>>>>>', fontMetrics);
 	loadFont(gl, 'Robotosheet0.png');
 	//loadFont(gl, fontMetrics.pages[0])
 	//loadFont(gl, fontMetrics.pages[0]);
