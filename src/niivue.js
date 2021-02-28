@@ -173,6 +173,19 @@ export function loadVolume(overlayItem) {
 	return
 } // loadVolume()
 
+var loadFontMetrics = async function() {
+	let fontMetrics = [];
+	fetch("./Roboto.json")
+	.then(r => r.json())
+	.then(json => {
+		fontMetrics=json;
+	},
+	response => {
+		console.log('Error loading json:', response)
+	});
+	return fontMetrics;
+}
+	
 var loadFont = function(gl, pngName) {
 	var pngImage = null;
 	pngImage = new Image();
@@ -193,7 +206,7 @@ var loadFont = function(gl, pngName) {
 	console.log("loading PNG ", pngName);
 } // loadFont()
 
-export function init(gl) {
+export async function init(gl) {
 	//initial setup: only at the startup of the component
 	sliceShader = new Shader(gl, vertSliceShader, fragSliceShader);
 	sliceShader.use(gl);
@@ -211,9 +224,12 @@ export function init(gl) {
 	fontShader = new Shader(gl, vertFontShader, fragFontShader);
 	fontShader.use(gl);
 	gl.uniform1i(fontShader.uniforms["fontTexture"], 3);
-	let fontMetrics = require('./Roboto.json');
-	loadFont(gl, fontMetrics.pages[0]);
+	let fontMetrics =  await loadFontMetrics();
+	//let fontMetrics = require('../public/Roboto.json');
 	console.log(fontMetrics);
+	loadFont(gl, 'Robotosheet0.png');
+	//loadFont(gl, fontMetrics.pages[0])
+	//loadFont(gl, fontMetrics.pages[0]);
 	let base = fontMetrics.common.base;
     let scaleW = fontMetrics.common.scaleW;
     let scaleH = fontMetrics.common.scaleH;
