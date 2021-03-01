@@ -177,7 +177,7 @@ var loadFont = function(gl, pngName) {
 	var pngImage = null;
 	pngImage = new Image();
 	pngImage.onload = function() {
-		console.log(">>>PNG resolution ", pngImage.width, ",", pngImage.height);
+		//console.log("PNG resolution ", pngImage.width, ",", pngImage.height);
 		var pngTexture = gl.createTexture();
 		gl.activeTexture(gl.TEXTURE3);
 		gl.bindTexture(gl.TEXTURE_2D, pngTexture);
@@ -190,7 +190,7 @@ var loadFont = function(gl, pngName) {
 		gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, pngImage);
 	}
 	pngImage.src = pngName;  // MUST BE SAME DOMAIN!!!
-	console.log("loading PNG ", pngName);
+	//console.log("loading PNG ", pngName);
 } // loadFont()
 
 export async function init(gl) {
@@ -215,10 +215,10 @@ export async function init(gl) {
 	async function fetchJSON() {
 		const response = await fetch('./Roboto.json');
 		fontMetrics = await response.json();
-		console.log('<<<',fontMetrics);
+		//console.log('<<<',fontMetrics);
 	}
 	await fetchJSON();
-	console.log('>>>>>>', fontMetrics);
+	//console.log('>>>>>>', fontMetrics);
 	loadFont(gl, 'Robotosheet0.png');
 	//loadFont(gl, fontMetrics.pages[0])
 	//loadFont(gl, fontMetrics.pages[0]);
@@ -235,25 +235,19 @@ export async function init(gl) {
         fontMets[id].xo = 0;
         fontMets[id].yo = 0;
         fontMets[id].xadv = 0; //critical to set: font format omits non-graphical characters (e.g. DEL): we skip characters whete X-advance = 0
-        fontMets[id].xEnd = 0;
-        fontMets[id].yEnd = 0;
 	}
 	//load raw values: may only sparsely describe range 0..255
 	for (var i = 0; i < fontMetrics.chars.length; i++) { //clear ASCII codes 0..256
 		let id = fontMetrics.chars[i].id;
 		fontMets[id].x = fontMetrics.chars[i].x / scaleW;
 		fontMets[id].y = fontMetrics.chars[i].y / scaleH;
-		fontMets[id].w = fontMetrics.chars[i].width;
-		fontMets[id].h = fontMetrics.chars[i].height;
+		fontMets[id].w = fontMetrics.chars[i].width / scaleW;
+		fontMets[id].h = fontMetrics.chars[i].height / scaleH;
 		fontMets[id].xo = fontMetrics.chars[i].xoffset;
 		fontMets[id].xadv = fontMetrics.chars[i].xadvance;
 		//normalize from pixels to 0..1
 		fontMets[id].yo = base - (fontMets[id].h + fontMetrics.chars[i].yoffset);
-		fontMets[id].xEnd = fontMets[id].x + (fontMets[id].w / scaleW);
-		fontMets[id].yEnd = fontMets[id].y + (fontMets[id].h / scaleH);
     }
-	var bytes = new Buffer("R");
-	console.log("fontMets loaded", fontMets[bytes[0]]);	
 } // init()
 
 export function updateGLVolume(gl, overlayItem) { //load volume or change contrast
@@ -420,8 +414,16 @@ function drawTextRight(gl, xy, char) { //to right of x, vertically centered on y
 	let y = (textHeight * gl.canvas.height);
 	let x = y;
 	console.log("drawText", char);
-	console.log(">>fontMetrics", fontMets[char[3]]);
+	//console.log(">>fontMetrics", fontMets);
+	var bytes = new Buffer(char);
+	//console.log("fontMets loaded", fontMets[bytes[0]]);
+	//vUV
+	let metrics = fontMets[bytes[0]];
+	let lbwh = [metrics.x, metrics.y, metrics.w, metrics.h];
+	console.log(">>fontMetrics", lbwh);
 	gl.uniform4f(fontShader.uniforms["leftTopWidthHeight"], xy[0], xy[1]- (0.5 * y), x, y);
+	gl.uniform4f(fontShader.uniforms["uvLeftTopWidthHeight"], lbwh[0], lbwh[1], lbwh[2], lbwh[3]);
+	gl.uniform4fv(fontShader.uniforms["fontColor"], crosshairColor);
 	gl.drawArrays(gl.TRIANGLE_STRIP, 5, 4);
 }
 
@@ -458,7 +460,7 @@ function draw2D(gl, leftTopWidthHeight, axCorSag) {
 	gl.uniform4f(lineShader.uniforms["leftTopWidthHeight"], leftTopWidthHeight[0], xtop - (0.5*crosshairWidth), leftTopWidthHeight[2],  crosshairWidth);
 	gl.drawArrays(gl.TRIANGLE_STRIP, 5, 4);
 	if ((axCorSag === 0) || (axCorSag === 1))
-		drawTextRight(gl, [leftTopWidthHeight[0] + 1, leftTopWidthHeight[1] + (0.5 * leftTopWidthHeight[3]) ], "L");
+		drawTextRight(gl, [leftTopWidthHeight[0] + 1, leftTopWidthHeight[1] + (0.5 * leftTopWidthHeight[3]) ], "R");
 } // draw2D()
 
 function draw3D(gl, overlayItem) {

@@ -174,6 +174,7 @@ export var vertFontShader =
 layout(location=0) in vec3 pos;
 uniform vec2 canvasWidthHeight;
 uniform vec4 leftTopWidthHeight;
+uniform vec4 uvLeftTopWidthHeight;
 out vec2 vUV;
 void main(void) {
 	//convert pixel x,y space 1..canvasWidth,1..canvasHeight to WebGL 1..-1,-1..1
@@ -182,7 +183,8 @@ void main(void) {
 	frac.y = 1.0 - ((leftTopWidthHeight.y + ((1.0 - pos.y) * leftTopWidthHeight.w)) / canvasWidthHeight.y); //1..0
 	frac = (frac * 2.0) - 1.0;
 	gl_Position = vec4(frac, 0.0, 1.0);
-	vUV = pos.xy;
+	//vUV = pos.xy;
+	vUV = vec2(uvLeftTopWidthHeight.x + (pos.x * uvLeftTopWidthHeight.z), uvLeftTopWidthHeight.y  + ((1.0 - pos.y) * uvLeftTopWidthHeight.w) );
 }`;
 
 export var fragFontShader =
@@ -191,18 +193,19 @@ export var fragFontShader =
 precision highp int;
 precision highp float;
 uniform highp sampler2D fontTexture;
+uniform vec4 fontColor;
 in vec2 vUV;
 out vec4 color;
 float median(float r, float g, float b) {
     return max(min(r, g), min(max(r, g), b));
 }
 void main() {
-	color = vec4(vUV.xy, 0.0, 1.0);
+	//color = vec4(vUV.xy, 0.0, 1.0);
 	//color = vec4(vUV.xy, 0.0, 1.0); return;
-	color.rgb = texture(fontTexture, vUV).rgb; return;
+	//color.rgb = texture(fontTexture, vUV).rgb; return;
     vec3 clr = 1.0 - texture(fontTexture, vUV).rgb;
 	float sigDist = median(clr.r, clr.g, clr.b) - 0.5;
     float opacity = clamp(sigDist/fwidth(sigDist) + 0.5, 0.0, 1.0);
-    color = vec4(clr.r,clr.g,clr.b,1.0 - opacity);
+    color = vec4(fontColor.rgb , fontColor.a * (1.0 - opacity));
 }`;
 
