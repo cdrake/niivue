@@ -183,7 +183,6 @@ void main(void) {
 	frac.y = 1.0 - ((leftTopWidthHeight.y + ((1.0 - pos.y) * leftTopWidthHeight.w)) / canvasWidthHeight.y); //1..0
 	frac = (frac * 2.0) - 1.0;
 	gl_Position = vec4(frac, 0.0, 1.0);
-	//vUV = pos.xy;
 	vUV = vec2(uvLeftTopWidthHeight.x + (pos.x * uvLeftTopWidthHeight.z), uvLeftTopWidthHeight.y  + ((1.0 - pos.y) * uvLeftTopWidthHeight.w) );
 }`;
 

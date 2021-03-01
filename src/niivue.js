@@ -9,7 +9,7 @@ import { vertFontShader, fragFontShader } from "./shader-srcs.js";
 
 import {bus} from "@/bus.js"
 
-export var textHeight = 0.2; //0 for no text, fraction of canvas height
+export var textHeight = 0.07; //0 for no text, fraction of canvas height
 export var colorbarHeight = 0.05; //0 for no colorbars, fraction of NIfTI j dimension
 export var crosshairWidth = 1; //0 for no crosshairs, pixels
 export var backColor =  [0, 0, 0, 1];
@@ -18,7 +18,7 @@ export const sliceTypeCoronal = 1;
 export const sliceTypeSagittal = 2;
 export const sliceTypeMultiplanar = 3;
 export const sliceTypeRender = 4;
-export var sliceType = sliceTypeAxial; //view: axial, coronal, sagittal, multiplanar or render
+export var sliceType = sliceTypeMultiplanar; //view: axial, coronal, sagittal, multiplanar or render
 export var renderAzimuth = 120;
 export var renderElevation = 15;
 
@@ -226,27 +226,30 @@ export async function init(gl) {
     let scaleW = fontMetrics.common.scaleW;
     let scaleH = fontMetrics.common.scaleH;
 	fontMets = [];
+	fontMets.base = base;
 	for (let id = 0; id < 256; id++) { //clear ASCII codes 0..256
 		fontMets[id] = {};
-		fontMets[id].x = 0;
-        fontMets[id].y = 0;
-        fontMets[id].w = 0;
-        fontMets[id].h = 0;
+		fontMets[id].wPix = 0;
+		fontMets[id].hPix = 0;
         fontMets[id].xo = 0;
         fontMets[id].yo = 0;
         fontMets[id].xadv = 0; //critical to set: font format omits non-graphical characters (e.g. DEL): we skip characters whete X-advance = 0
+		fontMets[id].uv_lbwh = [0, 0, 0, 0];
 	}
 	//load raw values: may only sparsely describe range 0..255
 	for (var i = 0; i < fontMetrics.chars.length; i++) { //clear ASCII codes 0..256
 		let id = fontMetrics.chars[i].id;
-		fontMets[id].x = fontMetrics.chars[i].x / scaleW;
-		fontMets[id].y = fontMetrics.chars[i].y / scaleH;
-		fontMets[id].w = fontMetrics.chars[i].width / scaleW;
-		fontMets[id].h = fontMetrics.chars[i].height / scaleH;
+		let x = fontMetrics.chars[i].x / scaleW;
+		let y = fontMetrics.chars[i].y / scaleH;
+		let w = fontMetrics.chars[i].width / scaleW;
+		let h = fontMetrics.chars[i].height / scaleH;
+		fontMets[id].wPix = fontMetrics.chars[i].width;
+		fontMets[id].hPix = fontMetrics.chars[i].height;
 		fontMets[id].xo = fontMetrics.chars[i].xoffset;
 		fontMets[id].xadv = fontMetrics.chars[i].xadvance;
+		fontMets[id].uv_lbwh = [x, y, w, h];
 		//normalize from pixels to 0..1
-		fontMets[id].yo = base - (fontMets[id].h + fontMetrics.chars[i].yoffset);
+		fontMets[id].yo = base - (h + fontMetrics.chars[i].yoffset);
     }
 } // init()
 
@@ -407,24 +410,53 @@ function drawColorbar(gl, leftTopWidthHeight) {
 	//gl.enable(gl.DEPTH_TEST);
 } // drawColorbar()
 
-function drawTextRight(gl, xy, char) { //to right of x, vertically centered on y
-	if (textHeight <= 0) return;
-	fontShader.use(gl)
-	gl.uniform2fv(fontShader.uniforms["canvasWidthHeight"], [gl.canvas.width, gl.canvas.height]);
-	let y = (textHeight * gl.canvas.height);
-	let x = y;
-	console.log("drawText", char);
-	//console.log(">>fontMetrics", fontMets);
-	var bytes = new Buffer(char);
-	//console.log("fontMets loaded", fontMets[bytes[0]]);
-	//vUV
-	let metrics = fontMets[bytes[0]];
-	let lbwh = [metrics.x, metrics.y, metrics.w, metrics.h];
-	console.log(">>fontMetrics", lbwh);
-	gl.uniform4f(fontShader.uniforms["leftTopWidthHeight"], xy[0], xy[1]- (0.5 * y), x, y);
-	gl.uniform4f(fontShader.uniforms["uvLeftTopWidthHeight"], lbwh[0], lbwh[1], lbwh[2], lbwh[3]);
+function textWidth(scale, str) {
+	let w = 0;
+	var bytes = new Buffer(str);
+	for (let i = 0; i < str.length; i++)
+		w += scale * fontMets[bytes[i]].xadv;
+	return w;
+} //TextWidth()
+
+function drawChar(gl, xy, scale, char) { //draw single character
+	let metrics = fontMets[char];
+	gl.uniform2f(fontShader.uniforms["canvasWidthHeight"], gl.canvas.width, gl.canvas.height);
+	let l = xy[0] + (metrics.xo * scale);
+	let t = xy[1] - (metrics.yo * scale);
+	let h = (scale * metrics.hPix);
+	let w = (scale * metrics.wPix);
+	//console.log(w, "x", h, ":", scale * metrics.xadv);
+	gl.uniform4f(fontShader.uniforms["leftTopWidthHeight"], l, t, w, h);
+	gl.uniform4fv(fontShader.uniforms["uvLeftTopWidthHeight"], metrics.uv_lbwh);
 	gl.uniform4fv(fontShader.uniforms["fontColor"], crosshairColor);
 	gl.drawArrays(gl.TRIANGLE_STRIP, 5, 4);
+	return scale * metrics.xadv;
+}
+
+function drawText(gl, xy, str) { //to right of x, vertically centered on y
+	if (textHeight <= 0) return;
+	fontShader.use(gl)
+	let scale = (textHeight * gl.canvas.height) / fontMets.base;
+	var bytes = new Buffer(str);
+	for (let i = 0; i < str.length; i++)
+		xy[0] += drawChar(gl, xy, scale, bytes[i]);
+}
+
+function drawTextRight(gl, xy, str) { //to right of x, vertically centered on y
+	if (textHeight <= 0) return;
+	fontShader.use(gl)
+	xy[1] += (0.5 * textHeight * gl.canvas.height);
+	drawText(gl, xy, str)
+}
+
+function drawTextBelow(gl, xy, str) { //to right of x, vertically centered on y
+	if (textHeight <= 0) return;
+	fontShader.use(gl)
+	let scale = (textHeight * gl.canvas.height) / fontMets.base;
+	//console.log(scale, "wid", textWidth(scale, str));//let scale = (textHeight * gl.canvas.height) / fontMets.base;///txt.BaseHeight;
+	xy[0] -= 0.5 * textWidth(scale, str);
+	xy[1] += (textHeight * gl.canvas.height);
+	drawText(gl, xy, str)
 }
 
 function draw2D(gl, leftTopWidthHeight, axCorSag) {
@@ -460,7 +492,11 @@ function draw2D(gl, leftTopWidthHeight, axCorSag) {
 	gl.uniform4f(lineShader.uniforms["leftTopWidthHeight"], leftTopWidthHeight[0], xtop - (0.5*crosshairWidth), leftTopWidthHeight[2],  crosshairWidth);
 	gl.drawArrays(gl.TRIANGLE_STRIP, 5, 4);
 	if ((axCorSag === 0) || (axCorSag === 1))
-		drawTextRight(gl, [leftTopWidthHeight[0] + 1, leftTopWidthHeight[1] + (0.5 * leftTopWidthHeight[3]) ], "R");
+		drawTextRight(gl, [leftTopWidthHeight[0] + 1, leftTopWidthHeight[1] + (0.5 * leftTopWidthHeight[3]) ], "L");
+	if ( axCorSag === 0)
+		drawTextBelow(gl, [leftTopWidthHeight[0] + (0.5 * leftTopWidthHeight[2]), leftTopWidthHeight[1] + 1 ], "A");
+	if ( axCorSag > 0)
+		drawTextBelow(gl, [leftTopWidthHeight[0] + (0.5 * leftTopWidthHeight[2]), leftTopWidthHeight[1] + 1 ], "S");
 } // draw2D()
 
 function draw3D(gl, overlayItem) {
@@ -564,6 +600,8 @@ export function drawSlices(gl, overlayItem) {
 		draw2D(gl, [ltwh[0],ltwh[1], wX, hZ], 1);
 		//draw sagittal
 		draw2D(gl, [ltwh[0]+wX,ltwh[1], wY, hZ], 2);
+		//demonstrate font descenders
+		drawTextBelow(gl, [ltwh[0]+wX + (0.5 * wY), ltwh[1] + hZ ], "Syzygy");
 		//draw colorbar (optional)
 		var margin = colorBarMargin * hY;
 		drawColorbar(gl, [ltwh[0]+wX+margin, ltwh[1] + hY + margin, wY - margin - margin, hY * colorbarHeight]);
