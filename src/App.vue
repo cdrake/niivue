@@ -126,8 +126,8 @@ export default {
   },
 
   created () {
-    bus.$on('crosshair-pos-change', (posString) => {
-    this.coordinateString = posString 
+    bus.$on('mm-change', (pos) => {
+    this.coordinateString = pos[0].toFixed(2)+'×'+pos[1].toFixed(2)+'×'+pos[2].toFixed(2);
     });
 
   },
@@ -145,29 +145,41 @@ export default {
       overlayList: [
       // first item is brackground image
         {
-          url: "./LAS.nii.gz",//"./RAS.nii.gz", "./spm152.nii.gz",
+          url: "./mni152.nii.gz",//"./RAS.nii.gz", "./spm152.nii.gz",
           volume: {hdr: null, img: null},
-          name: "LAS.nii.gz",
+          name: "mni125.nii.gz",
           intensityMin: 0, // not used yet
           intensityMax: 100, // not used yet
           intensityRange:[0, 100], // not used yet
           colorMap: "gray",
           opacity: 100,
+          visible: true,
         },
         {
-          url: "./IPL.nii.gz", //"./hippo.nii.gz",
+          url: "./hippo.nii.gz",
           volume: {hdr: null, img: null},
-          name: "IPL.nii.gz",
+          name: "hippo.nii.gz",
           intensityMin: 0, // not used yet
           intensityMax: 100, // not used yet
           intensityRange:[0, 100], // not used yet
           colorMap: "Winter",
           opacity: 100,
+          visible: true,
+        },
+        {
+          url: "./hippolr.nii.gz",
+          volume: {hdr: null, img: null},
+          name: "hippolr.nii.gz",
+          intensityMin: 0, // not used yet
+          intensityMax: 100, // not used yet
+          intensityRange:[0, 100], // not used yet
+          colorMap: "Warm",
+          opacity: 100,
+          visible: true,
         },
       ]
     }
   },
-
   computed: {
     urlOverlayList: function(){
       let vols = []
@@ -185,7 +197,8 @@ export default {
             intensityMax:100,
             intensityRange: [0,100],
             colorMap: "gray",
-            opacity: 100
+            opacity: 100,
+            visible: true,
           }
         )
       }
