@@ -61,8 +61,7 @@ export class NVImage {
   maxShearDeg?: number
   useQFormNotSForm: boolean
 
-  alphaThreshold?: boolean
-
+  colormapType: number
   pixDims?: number[]
   matRAS?: mat4
   pixDimsRAS?: number[]
@@ -170,6 +169,7 @@ export class NVImage {
     this.cal_minNeg = cal_minNeg
     this.cal_maxNeg = cal_maxNeg
     this.colorbarVisible = colorbarVisible
+    this.colormapType = 0 // COLORMAP_TYPE MIN_TO_MAX
 
     // TODO this was missing
     this.useQFormNotSForm = useQFormNotSForm

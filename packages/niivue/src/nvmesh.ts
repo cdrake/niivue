@@ -22,6 +22,7 @@ import {
   X3D,
   AnyNumberArray
 } from './nvmesh-types.js'
+import { COLORMAP_TYPE } from './nvdocument.js'
 
 /** Enum for text alignment
  */
@@ -54,7 +55,7 @@ export type NVMeshLayer = {
   values: AnyNumberArray // number[] | Float32Array | Uint32Array
   outlineBorder?: number
   isTransparentBelowCalMin?: boolean
-  alphaThreshold?: boolean
+  colormapType?: number
   base64?: string
   // TODO referenced in niivue/refreshColormaps
   colorbarVisible?: boolean
@@ -70,6 +71,7 @@ export const NVMeshLayerDefaults = {
   cal_max: 0,
   cal_minNeg: 0,
   cal_maxNeg: 0,
+  colormapType: COLORMAP_TYPE.MIN_TO_MAX,
   values: new Array<number>()
 }
 
@@ -1063,7 +1065,7 @@ export class NVMesh {
           if (layer.outlineBorder > 0.0) {
             opaque = NVMeshUtilities.getClusterBoundary(rgba8, this.tris)
           }
-          
+
           k = 0
           for (let j = 0; j < layer.values.length; j++) {
             let opa = opacity
@@ -1118,8 +1120,7 @@ export class NVMesh {
           layer.isTransparentBelowCalMin = true
         }
         let mn = layer.cal_min
-        // let mnVisible = mn;
-        if (layer.alphaThreshold) {
+        if (layer.colormapType !== COLORMAP_TYPE.MIN_TO_MAX) {
           mn = Math.min(mn, 0.0)
         }
         const scale255 = 255.0 / (layer.cal_max - mn)
@@ -1127,31 +1128,111 @@ export class NVMesh {
         if (!layer.isTransparentBelowCalMin) {
           mnCal = Number.NEGATIVE_INFINITY
         }
-          // blend colors for each voxel
+        // create border map for optional outline
+        let borders = new Array(nvtx).fill(false)
+        if (layer.outlineBorder > 0.0) {
           const v255s = new Uint8Array(nvtx).fill(0)
           for (let j = 0; j < nvtx; j++) {
             const v = layer.values[j + frameOffset]
-            if (v < mnCal) {
+            if (v >= mnCal) {
+              v255s[j] = 1
+            }
+          }
+          borders = NVMeshUtilities.getClusterBoundaryU8(v255s, this.tris)
+        }
+        // create lookup table for translucency
+        const alphas = new Float32Array(256).fill(opacity)
+        if (mnCal > mn && layer.colormapType === COLORMAP_TYPE.ZERO_TO_MAX_TRANSLUCENT_BELOW_MIN) {
+          let minOpaque = Math.round((mnCal - mn) * scale255)
+          minOpaque = Math.max(minOpaque, 1)
+          for (let j = 1; j < minOpaque; j++) {
+            alphas[j] = Math.pow(j / minOpaque, 2.0)
+          }
+          mnCal = mn + Number.EPSILON
+        }
+        for (let j = 0; j < nvtx; j++) {
+          const v = layer.values[j + frameOffset]
+          if (v < mnCal) {
+            continue
+          }
+          let v255 = Math.round((v - mn) * scale255)
+          if (v255 < 0 && layer.isTransparentBelowCalMin) {
+            continue
+          }
+          v255 = Math.max(0.0, v255)
+          v255 = Math.min(255.0, v255)
+          let opa = alphas[v255]
+          v255 *= 4
+          let vtx = j * 28 + 24 // posNormClr is 28 bytes stride, RGBA color at offset 24,
+          if (this.f32PerVertex !== 7) {
+            vtx = j * 20 + 16
+          }
+          if (layer.isAdditiveBlend) {
+            const j4 = j * 4
+            // sum red, green and blue layers
+            additiveRGBA[j4 + 0] = additiveBlend(additiveRGBA[j4 + 0], lut[v255 + 0])
+            additiveRGBA[j4 + 1] = additiveBlend(additiveRGBA[j4 + 1], lut[v255 + 1])
+            additiveRGBA[j4 + 2] = additiveBlend(additiveRGBA[j4 + 2], lut[v255 + 2])
+            additiveRGBA[j4 + 3] = additiveBlend(additiveRGBA[j4 + 3], 255.0)
+          } else {
+            if (borders[j]) {
+              opa = layer.outlineBorder
+            }
+            u8[vtx + 0] = lerp(u8[vtx + 0], lut[v255 + 0], opa)
+            u8[vtx + 1] = lerp(u8[vtx + 1], lut[v255 + 1], opa)
+            u8[vtx + 2] = lerp(u8[vtx + 2], lut[v255 + 2], opa)
+          }
+        }
+
+        if (layer.useNegativeCmap) {
+          const lut = cmapper.colormap(layer.colormapNegative, layer.colormapInvert)
+          let mn = layer.cal_min
+          let mx = layer.cal_max
+          if (isFinite(layer.cal_minNeg) && isFinite(layer.cal_minNeg)) {
+            mn = -layer.cal_minNeg
+            mx = -layer.cal_maxNeg
+          }
+          if (mx < mn) {
+            ;[mn, mx] = [mx, mn]
+          }
+          let mnCal = mn
+          console.log(mn, mx)
+          if (layer.colormapType !== COLORMAP_TYPE.MIN_TO_MAX) {
+            mn = 0.0
+          }
+          mn = Math.max(mn, Number.EPSILON)
+          //TODO
+          // do not shade 0.0 twice with positive and negative colormap
+/*
+          const scale255neg = 255.0 / (mx - mn)
+          // determine color
+          const v255s = new Uint8Array(nvtx).fill(0)
+          for (let j = 0; j < nvtx; j++) {
+            const v = -layer.values[j + frameOffset]
+            if (v < mnVisible) {
               continue
             }
-            let v255 = Math.round((v - mn) * scale255)
-            if (v255 < 0 && layer.isTransparentBelowCalMin) {
+            const v255 = Math.round((v - mn) * scale255neg)
+            if (v255 < 0) {
               continue
             }
-            v255 = Math.max(0.0, v255)
-            v255 = Math.min(255.0, v255)
             v255s[j] = v255
           }
+          // determine opacity
           let borders = new Array(nvtx).fill(false)
           if (layer.outlineBorder > 0.0) {
-              borders = NVMeshUtilities.getClusterBoundaryU8(v255s, this.tris)
+            borders = NVMeshUtilities.getClusterBoundaryU8(v255s, this.tris)
           }
           for (let j = 0; j < nvtx; j++) {
-            const v = layer.values[j + frameOffset]
-            if (v < mnCal) {
+            let v255 = v255s[j]
+            if (v255 <= 0) {
               continue
             }
-            let v255 = v255s[j] * 4
+            let opa = opacity
+            if (borders[j]) {
+              opa = layer.outlineBorder
+            }
+            v255 = Math.min(255.0, v255) * 4
             let vtx = j * 28 + 24 // posNormClr is 28 bytes stride, RGBA color at offset 24,
             if (this.f32PerVertex !== 7) {
               vtx = j * 20 + 16
@@ -1164,81 +1245,12 @@ export class NVMesh {
               additiveRGBA[j4 + 2] = additiveBlend(additiveRGBA[j4 + 2], lut[v255 + 2])
               additiveRGBA[j4 + 3] = additiveBlend(additiveRGBA[j4 + 3], 255.0)
             } else {
-              let opa = opacity
-              if (borders[j]) {
-                opa = layer.outlineBorder
-              }
               u8[vtx + 0] = lerp(u8[vtx + 0], lut[v255 + 0], opa)
               u8[vtx + 1] = lerp(u8[vtx + 1], lut[v255 + 1], opa)
               u8[vtx + 2] = lerp(u8[vtx + 2], lut[v255 + 2], opa)
             }
           }
-
-       
-        if (layer.useNegativeCmap) {
-          const lut = cmapper.colormap(layer.colormapNegative, layer.colormapInvert)
-            let mn = layer.cal_min
-            let mx = layer.cal_max
-            if (isFinite(layer.cal_minNeg) && isFinite(layer.cal_minNeg)) {
-              mn = -layer.cal_minNeg
-              mx = -layer.cal_maxNeg
-            }
-            if (mx < mn) {
-              ;[mn, mx] = [mx, mn]
-            }
-            let mnVisible = mn
-            if (mnVisible === 0.0) {
-              mnVisible = Number.EPSILON
-            } // do not shade 0.0 twice with positive and negative colormap
-            if (layer.alphaThreshold) {
-              mn = 0.0
-            }
-            const scale255neg = 255.0 / (mx - mn)
-            // determine color
-            const v255s = new Uint8Array(nvtx).fill(0)
-            for (let j = 0; j < nvtx; j++) {
-              const v = -layer.values[j + frameOffset]
-              if (v < mnVisible) {
-                continue
-              }
-              let v255 = Math.round((v - mn) * scale255neg)
-              if (v255 < 0) {
-                continue
-              }
-              v255s[j] = v255;
-            }
-            //determine opacity
-            let borders = new Array(nvtx).fill(false)
-            if (layer.outlineBorder > 0.0) {
-              borders = NVMeshUtilities.getClusterBoundaryU8(v255s, this.tris)
-            }
-            for (let j = 0; j < nvtx; j++) {
-              let v255 = v255s[j]
-              if (v255 <= 0) {
-                continue
-              }
-              let opa = opacity
-              if (borders[j]) {
-                opa = layer.outlineBorder
-              }
-              v255 = Math.min(255.0, v255) * 4
-              let vtx = j * 28 + 24 // posNormClr is 28 bytes stride, RGBA color at offset 24,
-              if (this.f32PerVertex !== 7) {
-                vtx = j * 20 + 16
-              }
-              if (layer.isAdditiveBlend) {
-                const j4 = j * 4
-                // sum red, green and blue layers
-                additiveRGBA[j4 + 0] = additiveBlend(additiveRGBA[j4 + 0], lut[v255 + 0])
-                additiveRGBA[j4 + 1] = additiveBlend(additiveRGBA[j4 + 1], lut[v255 + 1])
-                additiveRGBA[j4 + 2] = additiveBlend(additiveRGBA[j4 + 2], lut[v255 + 2])
-                additiveRGBA[j4 + 3] = additiveBlend(additiveRGBA[j4 + 3], 255.0)
-              } else {
-                u8[vtx + 0] = lerp(u8[vtx + 0], lut[v255 + 0], opa)
-                u8[vtx + 1] = lerp(u8[vtx + 1], lut[v255 + 1], opa)
-                u8[vtx + 2] = lerp(u8[vtx + 2], lut[v255 + 2], opa)
-              }
-            }
+        */
         }
       }
     }
