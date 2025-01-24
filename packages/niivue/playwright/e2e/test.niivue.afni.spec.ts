@@ -34,10 +34,10 @@ test('afni anat2temp', async ({ page }) => {
       }
     ]
     await nv.loadVolumes(volumeList)
-    nv.volumes[1].alphaThreshold = 1 // was true in example from PT
+    nv.volumes[1].alphaThreshold = true // was true in example from PT
     nv.overlayOutlineWidth = 0
     nv.opts.multiplanarForceRender = true
-    nv.backgroundMasksOverlays = 1 // was true in example from PT
+    nv.backgroundMasksOverlays = true // was true in example from PT
     nv.scene.crosshairPos = nv.mm2frac([-1, -17, 5.0])
     nv.updateGLVolume()
     return nv.volumes.length

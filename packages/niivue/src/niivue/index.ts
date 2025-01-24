@@ -6480,7 +6480,13 @@ export class Niivue {
       this.gl.uniform1f(orientShader.uniforms.cal_min, overlayItem.cal_min!)
       this.gl.uniform1f(orientShader.uniforms.cal_max, overlayItem.cal_max!)
     }
-    this.gl.uniform1i(orientShader.uniforms.isAlphaThreshold, overlayItem.alphaThreshold!)
+    
+    this.gl.uniform1i(orientShader.uniforms.isAlphaThreshold, overlayItem.alphaThreshold === true ? 1 : 0);
+
+    // this.gl.uniform1i(orientShader.uniforms.isAlphaThreshold, overlayItem.alphaThreshold! === true)
+    //this.gl.uniform1i(orientShader.uniforms.isColorbarFromZero, overlayItem.alphaThreshold !== undefined)
+    this.gl.uniform1i(orientShader.uniforms.isColorbarFromZero, overlayItem.alphaThreshold !== undefined ? 1 : 0);
+    
     this.gl.uniform1i(orientShader.uniforms.isAdditiveBlend, this.opts.isAdditiveBlend ? 1 : 0)
     // if unused colormapNegative https://github.com/niivue/niivue/issues/490
     let mnNeg = Number.POSITIVE_INFINITY
