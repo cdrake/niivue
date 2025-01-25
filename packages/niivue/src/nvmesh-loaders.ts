@@ -849,7 +849,7 @@ export class NVMeshLoaders {
     const layer: NVMeshLayer = {
       ...NVMeshLayerDefaults,
       colormapInvert: false,
-      alphaThreshold: false,
+      colormapType: 0, // COLORMAP_TYPE.MIN_TO_MAX
       isTransparentBelowCalMin: true,
       isAdditiveBlend: false,
       colorbarVisible: true,
@@ -1745,10 +1745,6 @@ export class NVMeshLoaders {
       } else {
         scalars = new Float32Array(_buffer, filepos, NSCALAR * nvert)
       }
-      /*TODOconsole.log(scalars.length,'!!!!')
-      for (let i = 0; i < scalars.length; i++) {
-        scalars[i] = -scalars[i]
-      } */
       filepos += bytesPerScalar * NSCALAR * nvert
     }
     if (n_vert > 0) {

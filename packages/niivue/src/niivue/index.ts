@@ -7664,7 +7664,7 @@ export class Niivue {
       for (let i = 0; i < nVol; i++) {
         const volume = this.volumes[i]
         const neg = negMinMax(volume.cal_min!, volume.cal_max!, volume.cal_minNeg, volume.cal_maxNeg)
-        const isColorbarFromZero = volume.colormapType !== COLORMAP_TYPE.MIN_TO_MAX ? 1 : 0
+        const isColorbarFromZero = volume.colormapType !== COLORMAP_TYPE.MIN_TO_MAX
         // add negative colormaps BEFORE positive ones: we draw them in order from left to right
         this.addColormapList(
           volume.colormapNegative,
@@ -7712,7 +7712,7 @@ export class Niivue {
           if (layer.colormap.length < 1) {
             continue
           }
-          const isColorbarFromZero = layer.colormapType !== COLORMAP_TYPE.MIN_TO_MAX ? 1 : 0
+          const isColorbarFromZero = layer.colormapType !== COLORMAP_TYPE.MIN_TO_MAX
           const neg = negMinMax(layer.cal_min, layer.cal_max, layer.cal_minNeg, layer.cal_maxNeg)
           this.addColormapList(
             layer.colormapNegative,
