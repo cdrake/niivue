@@ -160,6 +160,7 @@
   nv3.setSliceType(nv3.sliceTypeRender);
   nv3.setClipPlane(clipPlane);
   nv3.setVolumeRenderIllumination(illumination);
+  nv3.setRenderGradientValues(true);
 
   const nv4 = new Niivue(defaults);
   nv4.attachTo("gl4");
@@ -168,6 +169,7 @@
   nv4.setSliceType(nv4.sliceTypeRender);
   nv4.setClipPlane(clipPlane);
   nv4.setVolumeRenderIllumination(illumination);
+  nv4.setRenderGradientValues(true);
 
   const renderers = [nv1, nv2, nv3, nv4]
 
