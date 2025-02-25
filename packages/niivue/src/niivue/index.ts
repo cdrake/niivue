@@ -6083,10 +6083,7 @@ export class Niivue {
     const tempTex3D =
       this.opts.gradientOrder === 2
         ? this.rgba16Tex(null, TEXTURE8_GRADIENT_TEMP, hdr.dims, true)
-        : this.rgbaTex(null, TEXTURE8_GRADIENT_TEMP, hdr.dims)
-    // const tempTex3D = false
-    //   ? this.rgba16Tex(null, TEXTURE8_GRADIENT_TEMP, hdr.dims)
-    //   : this.rgbaTex(null, TEXTURE8_GRADIENT_TEMP, hdr.dims)
+        : this.rgbaTex(null, TEXTURE8_GRADIENT_TEMP, hdr.dims, true)
     const blurShader = this.opts.gradientOrder === 2 ? this.sobelBlurShader! : this.blurShader!
     blurShader.use(gl)
 
@@ -6133,6 +6130,10 @@ export class Niivue {
       const coordZ = (1 / hdr.dims[3]) * (i + 0.5)
       gl.uniform1f(sobelShader.uniforms.coordZ, coordZ)
       gl.framebufferTextureLayer(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, this.gradientTexture, 0, i)
+      const status = gl.checkFramebufferStatus(gl.FRAMEBUFFER)
+      if (status !== gl.FRAMEBUFFER_COMPLETE) {
+        log.error('framebuffer status: ', status)
+      }
       gl.clear(gl.DEPTH_BUFFER_BIT)
       gl.drawArrays(gl.TRIANGLE_STRIP, 0, faceStrip.length / 3)
     }
