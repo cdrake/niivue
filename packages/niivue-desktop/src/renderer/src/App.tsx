@@ -25,11 +25,14 @@ import { registerLoadVolumeHandler } from './ipcHandlers/loadVolume'
 const electron = window.electron
 
 // disable niivue drag and drop handler in favor of our custom electron solution
+const userPreferences = await electron.ipcRenderer.invoke('getPreferences')
+console.log('userPreferences', userPreferences)
 const nv = new Niivue({
   loadingText: '',
   dragAndDropEnabled: false,
   multiplanarEqualSize: true,
-  tileMargin: -1
+  tileMargin: -1,
+  ...userPreferences // Override defaults with stored user preferences
 })
 
 type AppCtx = {
