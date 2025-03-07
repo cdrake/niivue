@@ -1,4 +1,4 @@
 {
-  "files": [],
+  "files": ["src/preload/index.d.ts"],
   "references": [{ "path": "./tsconfig.node.json" }, { "path": "./tsconfig.web.json" }]
 }

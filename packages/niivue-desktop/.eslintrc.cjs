@@ -1,4 +1,8 @@
 module.exports = {
+  parserOptions: {
+    project: require('path').resolve(__dirname, 'tsconfig.eslint.json'),
+    tsconfigRootDir: __dirname
+  },
   extends: [
     'eslint:recommended',
     'plugin:react/recommended',
