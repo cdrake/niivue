@@ -20,8 +20,9 @@ export class AppStore {
 
   // Recent Files Methods
   getRecentFiles(): string[] {
-    // return this.store.get('recentFiles') ?? []
-    return []
+    const recentFiles = this.store.get('recentFiles') as []
+    console.log(recentFiles)
+    return recentFiles ?? []
   }
 
   addRecentFile(filePath: string): void {
@@ -33,13 +34,12 @@ export class AppStore {
   }
 
   clearRecentFiles(): void {
-    // this.store.set('recentFiles', [])
+    this.store.set('recentFiles', [])
   }
 
   // User Preferences Methods
   getPreferences(): Partial<NVConfigOptions> {
-    // return this.store.get('preferences') ?? {}
-    return {}
+    return this.store.get('preferences') ?? {}
   }
 
   setPreference<K extends keyof NVConfigOptions>(key: K, value: NVConfigOptions[K]): void {
@@ -49,7 +49,7 @@ export class AppStore {
   }
 
   resetPreferences(): void {
-    // this.store.set('preferences', {})
+    this.store.set('preferences', {})
   }
 }
 
