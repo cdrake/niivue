@@ -3905,8 +3905,9 @@ export class Niivue {
    * niivue.setGradientOpacity(0.6);
    * @see {@link https://niivue.github.io/niivue/features/gradient.opacity.html | live demo usage}
    */
-  async setGradientOpacity(gradientOpacity = 0.0): Promise<void> {
+  async setGradientOpacity(gradientOpacity = 0.0, renderSilhouette = 0.0): Promise<void> {
     this.opts.gradientOpacity = gradientOpacity
+    this.opts.renderSilhouette = renderSilhouette;
     if (this.renderGradientValues) {
       this.renderShader = this.renderGradientValuesShader
     } else if (this.gradientTextureAmount > 0.0 || gradientOpacity > 0.0) {
@@ -5945,6 +5946,7 @@ export class Niivue {
     this.gl.uniform1i(shader.uniforms.drawing, 7)
     this.gl.uniform1fv(shader.uniforms.renderDrawAmbientOcclusion, [this.renderDrawAmbientOcclusion, 1.0])
     this.gl.uniform1f(shader.uniforms.gradientAmount, gradientAmount)
+    this.gl.uniform1f(shader.uniforms.silhouettePower, this.opts.renderSilhouette);
     const gradientOpacityLut = new Float32Array(256)
     for (let i = 0; i < 256; i++) {
       if (this.opts.gradientOpacity === 0.0) {

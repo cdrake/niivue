@@ -290,7 +290,8 @@ export const DEFAULT_OPTIONS: NVConfigOptions = {
   measureTextHeight: 0.03,
   isAlphaClipDark: false,
   gradientOrder: 1,
-  gradientOpacity: 0.0
+  gradientOpacity: 0.0,
+  renderSilhouette: 0.0
 }
 
 type SceneData = {
