@@ -8,6 +8,7 @@ import { store } from '../utils/appStore.js'
 import { viewState, refreshMenu } from './menu.js'
 import { sliceTypeMap } from '../../common/sliceTypes.js'
 import { layouts } from '../../common/layouts.js'
+import { cachePreview, getCachedPreview } from './previewCache.js'
 
 export const registerIpcHandlers = (): void => {
   ipcMain.handle('openMeshFileDialog', openMeshFileDialog)
@@ -53,5 +54,12 @@ export const registerIpcHandlers = (): void => {
       viewState.sliceType = newSliceType
       refreshMenu()
     }
+  })
+
+  ipcMain.handle('preview:get', async (_evt, filePath: string) => {
+    // ensure we’ve generated it at least once
+    await cachePreview(filePath)
+    const entry = getCachedPreview(filePath)
+    return entry?.dataURL ?? null
   })
 }

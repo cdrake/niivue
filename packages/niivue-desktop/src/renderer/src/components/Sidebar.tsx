@@ -7,11 +7,13 @@ import { Text, ScrollArea } from '@radix-ui/themes';
 import { SceneTabs } from './SceneTabs';
 import { DragDropContext, Droppable, Draggable, DropResult } from 'react-beautiful-dnd';
 
+const electron = window.electron
+
 interface SidebarProps {
-  onRemoveVolume: (volume: NVImage) => void;
-  onRemoveMesh: (mesh: NVMesh) => void;
-  onMoveVolumeUp: (volume: NVImage) => void;
-  onMoveVolumeDown: (volume: NVImage) => void;
+  onRemoveVolume:    (volume: NVImage)  => void;
+  onRemoveMesh:      (mesh: NVMesh)      => void;
+  onMoveVolumeUp:    (volume: NVImage)  => void;
+  onMoveVolumeDown:  (volume: NVImage)  => void;
 }
 
 export function Sidebar({
@@ -20,74 +22,85 @@ export function Sidebar({
   onMoveVolumeUp,
   onMoveVolumeDown
 }: SidebarProps): JSX.Element {
-  const { volumes, meshes } = useContext(AppContext);
-  // Use local state to drive the ordering in the UI.
-  // We assume that whenever App updates volumes (e.g. after a move),
-  // this effect will update the local ordering.
-  const [orderedVolumes, setOrderedVolumes] = useState<NVImage[]>([]);
+  const { volumes, meshes, currentDocumentPath } = useContext(AppContext);
+
+  // local state for the document preview
+  const [previewDataUrl, setPreviewDataUrl] = useState<string|null>(null);
 
   useEffect(() => {
-    setOrderedVolumes(volumes);
-  }, [volumes]);
+    console.log('Sidebar.useEffect; doc=', currentDocumentPath)
+    if (!currentDocumentPath?.toLowerCase().endsWith('.nvd')) {
+      setPreviewDataUrl(null)
+      return
+    }
+  
+    electron.getPreviewForFile(currentDocumentPath)
+      .then(url => {
+        console.log('  preview URL received:', url)
+        setPreviewDataUrl(url)
+      })
+      .catch(err => {
+        console.error('  preview-fetch failed:', err)
+        setPreviewDataUrl(null)
+      })
+  }, [currentDocumentPath])
+  
 
-  /**
-   * When a drag ends, determine how far the item moved.
-   * Then, repeatedly call the appropriate move callback to update
-   * the Niivue volumes order.
-   */
+  // ordering logic for volumes…
+  const [orderedVolumes, setOrderedVolumes] = useState<NVImage[]>([]);
+  useEffect(() => { setOrderedVolumes(volumes) }, [volumes]);
+
   const handleDragEnd = (result: DropResult) => {
     if (!result.destination) return;
-    const sourceIndex = result.source.index;
-    const destinationIndex = result.destination.index;
-    if (sourceIndex === destinationIndex) return;
-
-    // Get the dragged volume from our local ordering.
-    const draggedVolume = orderedVolumes[sourceIndex];
-    const diff = destinationIndex - sourceIndex;
-
+    const src = result.source.index, dst = result.destination.index;
+    if (src === dst) return;
+    const vol = orderedVolumes[src], diff = dst - src;
     if (diff > 0) {
-      // Moving down: call the onMoveVolumeDown function repeatedly.
-      for (let i = 0; i < diff; i++) {
-        onMoveVolumeDown(draggedVolume);
-      }
+      for (let i = 0; i < diff; i++) onMoveVolumeDown(vol);
     } else {
-      // Moving up: call the onMoveVolumeUp function repeatedly.
-      for (let i = 0; i < Math.abs(diff); i++) {
-        onMoveVolumeUp(draggedVolume);
-      }
+      for (let i = 0; i < -diff; i++) onMoveVolumeUp(vol);
     }
-    // The global volumes ordering will update in App.tsx, which then
-    // updates the orderedVolumes state via the useEffect.
   };
 
   return (
     <div className="flex flex-col bg-gray-100 px-2 w-1/3 basis-1/3 min-w-[300px] max-w-[500px]">
+      {/* — document preview — */}
+      {previewDataUrl && (
+        <div className="mb-4 p-2 text-center">
+          <img
+            src={previewDataUrl}
+            alt="Document preview"
+            className="preview-image mx-auto"
+          />
+          <Text size="1" weight="medium">
+            {currentDocumentPath!.split(/[\\/]/).pop()}
+          </Text>
+        </div>
+      )}
+
+      {/* — layer list — */}
       <DragDropContext onDragEnd={handleDragEnd}>
         <ScrollArea style={{ height: '50%', paddingRight: '10px', marginBottom: '12px' }}>
-          <Text size="2" weight="bold">
-            Layers
-          </Text>
+          <Text size="2" weight="bold">Layers</Text>
           <Droppable droppableId="volumesDroppable">
             {(provided) => (
               <div ref={provided.innerRef} {...provided.droppableProps}>
                 {orderedVolumes.map((volume, index) => (
                   <Draggable
-                    key={volume.id || index.toString()}
-                    draggableId={volume.id || index.toString()}
+                    key={volume.id ?? index.toString()}
+                    draggableId={volume.id ?? index.toString()}
                     index={index}
                   >
-                    {(provided, snapshot) => (
+                    {(prov, snap) => (
                       <div
-                        ref={provided.innerRef}
-                        {...provided.draggableProps}
-                        // If you want to restrict the drag handle to a sub-component,
-                        // remove the spread of dragHandleProps here and pass it inside VolumeImageCard.
-                        {...provided.dragHandleProps}
+                        ref={prov.innerRef}
+                        {...prov.draggableProps}
+                        {...prov.dragHandleProps}
                         style={{
-                          userSelect: 'none',
-                          margin: '0 0 8px 0',
-                          ...provided.draggableProps.style,
-                          background: snapshot.isDragging ? '#f0f0f0' : 'white'
+                          userSelect:    'none',
+                          margin:        '0 0 8px 0',
+                          background:    snap.isDragging ? '#f0f0f0' : 'white',
+                          ...prov.draggableProps.style
                         }}
                       >
                         <VolumeImageCard
@@ -104,12 +117,13 @@ export function Sidebar({
               </div>
             )}
           </Droppable>
-          {/* MeshImageCards remain outside the draggable list. */}
-          {meshes.map((mesh, idx) => (
-            <MeshImageCard key={idx} image={mesh} onRemoveMesh={onRemoveMesh} />
+
+          {meshes.map((mesh, i) => (
+            <MeshImageCard key={i} image={mesh} onRemoveMesh={onRemoveMesh} />
           ))}
         </ScrollArea>
       </DragDropContext>
+
       <SceneTabs />
     </div>
   );

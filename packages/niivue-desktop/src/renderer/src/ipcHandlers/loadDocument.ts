@@ -8,9 +8,10 @@ interface HandlerProps {
   setVolumes: React.Dispatch<React.SetStateAction<NVImage[]>>
   setMeshes: React.Dispatch<React.SetStateAction<NVMesh[]>>
   nv: Niivue
+  setCurrentDocumentPath:   React.Dispatch<React.SetStateAction<string|undefined>>
 }
 
-export const registerLoadDocumentHandler = ({ nv, setVolumes, setMeshes }: HandlerProps): void => {
+export const registerLoadDocumentHandler = ({ nv, setVolumes, setMeshes, setCurrentDocumentPath }: HandlerProps): void => {
   electron.ipcRenderer.on('loadDocument', async (_, filePath: string) => {
     const base64 = await electron.ipcRenderer.invoke('loadFromFile', filePath)
 
@@ -34,6 +35,7 @@ export const registerLoadDocumentHandler = ({ nv, setVolumes, setMeshes }: Handl
       if (nv.volumes.length > 0) {
         setVolumes(nv.volumes)
       }
+      setCurrentDocumentPath(filePath)
     }
   })
 }

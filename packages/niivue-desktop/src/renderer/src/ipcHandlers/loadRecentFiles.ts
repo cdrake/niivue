@@ -6,52 +6,61 @@ import { base64ToJson, decompressGzipBase64ToJson, isProbablyGzip } from '@rende
 const electron = window.electron
 
 interface HandlerProps {
-  setVolumes: React.Dispatch<React.SetStateAction<NVImage[]>>
-  setMeshes: React.Dispatch<React.SetStateAction<NVMesh[]>>
-  nv: Niivue
+  nv:                      Niivue
+  setVolumes:              React.Dispatch<React.SetStateAction<NVImage[]>>
+  setMeshes:               React.Dispatch<React.SetStateAction<NVMesh[]>>
+  setCurrentDocumentPath:  React.Dispatch<React.SetStateAction<string|undefined>>
 }
-
 
 export const registerLoadRecentFileHandler = ({
   nv,
   setVolumes,
-  setMeshes
+  setMeshes,
+  setCurrentDocumentPath
 }: HandlerProps): void => {
-  electron.ipcRenderer.on('loadRecentFile', async (_, filePath: string) => {
+  electron.ipcRenderer.on('loadRecentFile', async (_evt, filePath: string) => {
     const base64 = await electron.ipcRenderer.invoke('loadFromFile', filePath)
-
-    // Check if the file is a mesh or a volume
     const pathLower = filePath.toLowerCase()
-    if(pathLower.endsWith('.nvd')) {
+
+    if (pathLower.endsWith('.nvd')) {
+      // load .nvd
       const json = isProbablyGzip(base64)
-      ? await decompressGzipBase64ToJson(base64)
-      : base64ToJson(base64)
+        ? await decompressGzipBase64ToJson(base64)
+        : base64ToJson(base64)
       if (!json) throw new Error('Invalid .nvd content')
+
       const doc = NVDocument.loadFromJSON(json)
       await nv.loadDocument(doc)
-      if(nv.meshes.length > 0) {
-        setMeshes(nv.meshes)
-      }
 
-      if(nv.volumes.length > 0) {
-        setVolumes(nv.volumes)
-      }
-    }
-    else if (MESH_EXTENSIONS.some((ext) => pathLower.endsWith(ext.toLowerCase()))) {
-      const arrayBuffer = Uint8Array.from(atob(base64), (c) => c.charCodeAt(0)).buffer
+      if (nv.meshes.length > 0) setMeshes(nv.meshes)
+      if (nv.volumes.length > 0) setVolumes(nv.volumes)
+
+      // **NEW**: inform context what doc is loaded
+      setCurrentDocumentPath(filePath)
+
+    } else if (MESH_EXTENSIONS.some(ext => pathLower.endsWith(ext.toLowerCase()))) {
+      // load mesh
+      const arrayBuffer = Uint8Array.from(atob(base64), c => c.charCodeAt(0)).buffer
       const mesh = await NVMesh.loadFromFile({
         file: new File([arrayBuffer], filePath),
-        gl: nv.gl,
+        gl:   nv.gl,
         name: filePath
       })
-      setMeshes((prev) => [...prev, mesh])
+      setMeshes(prev => [...prev, mesh])
+
+      // clear any document preview
+      setCurrentDocumentPath(undefined)
+
     } else {
-      // Assume it's a volume
+      // load volume
       const vol = await NVImage.loadFromBase64({
         base64,
-        name: filePath
+        name:   filePath
       })
-      setVolumes((prev) => [...prev, vol])
+      setVolumes(prev => [...prev, vol])
+
+      // clear any document preview
+      setCurrentDocumentPath(undefined)
     }
   })
 }

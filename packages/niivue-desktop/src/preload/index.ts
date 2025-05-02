@@ -1,17 +1,21 @@
-import { contextBridge } from 'electron'
+import { contextBridge, ipcRenderer } from 'electron'
 import { electronAPI } from '@electron-toolkit/preload'
 
-// Use `contextBridge` APIs to expose Electron APIs to
-// renderer only if context isolation is enabled, otherwise
-// just add to the DOM global.
 if (process.contextIsolated) {
   try {
-    // this is all we need. We mostly use the window.electron.ipcRenderer methods
-    contextBridge.exposeInMainWorld('electron', electronAPI)
+    // merge your new method into the existing electronAPI object:
+    const api = {
+      ...electronAPI,
+      getPreviewForFile: (filePath: string): Promise<string | null> =>
+        ipcRenderer.invoke('preview:get', filePath),
+    }
+
+    contextBridge.exposeInMainWorld('electron', api)
   } catch (error) {
     console.error(error)
   }
 } else {
-  // @ts-ignore (define in dts)
+  // fallback when not isolated
+  // @ts-ignore
   window.electron = electronAPI
 }

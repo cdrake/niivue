@@ -1,4 +1,4 @@
-import { app, Menu, dialog, systemPreferences } from 'electron'
+import { app, Menu, dialog, systemPreferences, BrowserWindow, MenuItemConstructorOptions, nativeImage } from 'electron'
 import { sliceTypeMap } from '../../common/sliceTypes.js'
 import { layouts } from '../../common/layouts.js'
 import { orientationLabelMap } from '../../common/orientationLabels.js'
@@ -7,6 +7,8 @@ import { DEFAULT_OPTIONS } from '@niivue/niivue'
 import { store } from './appStore.js'
 import { getMainWindow } from '../index.js'
 import fs from 'fs' // ✅ Works in ES Module mode
+import path from 'path'
+import { getCachedPreview, cachePreview } from './previewCache.js'
 
 export const viewState = {
   layout:    /** default */     'Auto',
@@ -19,18 +21,40 @@ export const viewState = {
 
 const isMac = process.platform === 'darwin'
 
-const getRecentFilesMenu = (win: Electron.BrowserWindow): Electron.MenuItemConstructorOptions[] => {
-  const recentFiles = store.getRecentFiles()
-  if (recentFiles.length === 0) {
+const getRecentFilesMenu = (win: BrowserWindow): MenuItemConstructorOptions[] => {
+  const files = store.getRecentFiles()
+  if (files.length === 0) {
     return [{ label: 'No Recent Files', enabled: false }]
   }
-  return recentFiles.map((file) => ({
-    label: file,
-    click: (): void => {
-      console.log('loading file', file)
-      win.webContents.send('loadRecentFile', file)
+
+  return files.map(fp => {
+    let icon
+
+    // only .nvd files have previews
+    if (fp.toLowerCase().endsWith('.nvd')) {
+      const entry = getCachedPreview(fp)
+      if (entry?.dataURL) {
+        icon = nativeImage
+          .createFromDataURL(entry.dataURL)
+          .resize({ width: 50, height: 50 })
+      }
     }
-  }))
+
+    return {
+      label: path.basename(fp),
+      icon,
+      click: () => {
+        // ensure fresh preview if the .nvd changed since last hover
+        if (fp.toLowerCase().endsWith('.nvd')) {
+          cachePreview(fp).finally(() => {
+            win.webContents.send('loadRecentFile', fp)
+          })
+        } else {
+          win.webContents.send('loadRecentFile', fp)
+        }
+      }
+    }
+  })
 }
 
 // Function to refresh menu dynamically

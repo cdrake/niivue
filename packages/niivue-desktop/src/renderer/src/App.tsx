@@ -51,6 +51,8 @@ type AppCtx = {
   setSliceType: (sliceType: SLICE_TYPE | null) => void
   // store niivue instance as a ref
   nvRef: React.MutableRefObject<Niivue>
+  currentDocumentPath?: string
+  setCurrentDocumentPath: React.Dispatch<React.SetStateAction<string | undefined>>
 }
 
 // setup context provider for the app
@@ -90,6 +92,7 @@ function App(): JSX.Element {
   const [sliceType, setSliceType] = useState<SLICE_TYPE | null>(null)
   const [labelDialogOpen, setLabelDialogOpen] = useState(false)
   const [labelEditMode, setLabelEditMode] = useState(false)
+  const [currentDocumentPath, setCurrentDocumentPath] = useState<string|undefined>(undefined)
 
   const niimathRef = useRef<Niimath>(new Niimath())
 
@@ -188,7 +191,7 @@ function App(): JSX.Element {
   
       // now register handlers
       registerLoadStandardHandler({ nv, setVolumes, setMeshes })
-      registerLoadRecentFileHandler({ nv, setVolumes, setMeshes })
+      registerLoadRecentFileHandler({ nv, setVolumes, setMeshes, setCurrentDocumentPath })
       registerSliceTypeHandler(nv)
       registerLayoutHandler(nv)
       registerCrosshairHandler(nv)
@@ -203,10 +206,16 @@ function App(): JSX.Element {
       registerOrientationLabelsInMarginHandler(nv)
       registerLoadMeshHandler({ nv, setMeshes })
       registerLoadVolumeHandler({ setVolumes })
-      registerLoadDocumentHandler({nv, setVolumes, setMeshes})
+      registerLoadDocumentHandler({nv, setVolumes, setMeshes, setCurrentDocumentPath})
       registerSaveCompressedDocumentHandler(nv)
       registerResetPreferencesHandler()
       registerLabelManagerDialogHandler(setLabelDialogOpen, setLabelEditMode)
+      registerLoadDocumentHandler({
+        nv,
+        setVolumes,
+        setMeshes,
+        setCurrentDocumentPath
+      })
       nv.drawScene() // draw after loading prefs
     }
   
@@ -243,7 +252,9 @@ function App(): JSX.Element {
         setSelectedImage,
         sliceType,
         setSliceType,
-        nvRef: useRef<Niivue>(nv)
+        nvRef: useRef<Niivue>(nv),
+        currentDocumentPath, 
+        setCurrentDocumentPath
       }}
     >
       <div className="flex flex-row size-full" onDrop={handleDrop} onDragOver={handleDragOver}>

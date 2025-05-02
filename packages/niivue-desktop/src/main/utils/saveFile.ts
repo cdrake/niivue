@@ -4,6 +4,7 @@ import { promisify } from 'util'
 import { dialog } from 'electron'
 import { store } from './appStore.js'
 import { refreshMenu } from './menu.js'
+import { cachePreview, invalidatePreview } from './previewCache.js'
 
 const gzipAsync = promisify(gzip)
 
@@ -21,7 +22,10 @@ export const saveCompressedNVDHandler = async (_: unknown, jsonStr: string): Pro
     await writeFile(filePath, compressed)
 
     store.addRecentFile(filePath)
+    invalidatePreview(filePath)     // so next load re-caches
+    await cachePreview(filePath)
     refreshMenu()
+
   } catch (error) {
     console.error('Failed to save compressed NVD:', error)
   }
