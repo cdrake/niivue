@@ -214,6 +214,76 @@ export class UIKRenderer {
     this.gl.drawArrays(this.gl.TRIANGLES, 0, 3)
     this.gl.bindVertexArray(null)
   }
+
+   /**
+   * Draws a rounded rectangle.
+   * @param leftTopWidthHeight - The bounding box of the rounded rectangle (left, top, width, height).
+   * @param fillColor - The fill color of the rectangle.
+   * @param outlineColor - The outline color of the rectangle.
+   * @param cornerRadius - The corner radius.
+   * @param thickness - The thickness of the outline.
+   */
+   public drawRoundedRect(config: {
+    bounds: Vec4
+    fillColor: Color
+    outlineColor: Color
+    cornerRadius?: number
+    thickness?: number
+  }): void {
+    const { bounds, fillColor, outlineColor, cornerRadius = -1, thickness = 10 } = config
+
+    if (!UIKRenderer.roundedRectShader) {
+      throw new Error('roundedRectShader undefined')
+    }
+
+    const gl = this.gl
+
+    // Use the rounded rectangle shader program
+    UIKRenderer.roundedRectShader.use(gl)
+
+    // Enable blending for transparency
+    gl.enable(gl.BLEND)
+    gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA)
+
+    // Set the necessary uniforms
+    const shader = UIKRenderer.roundedRectShader
+    const adjustedCornerRadius = cornerRadius === -1 ? thickness * 2 : cornerRadius
+
+    const rectParams = Array.isArray(bounds) ? vec4.fromValues(bounds[0], bounds[1], bounds[2], bounds[3]) : bounds
+
+    this.gl.uniform1f(shader.uniforms.thickness, thickness)
+    this.gl.uniform1f(shader.uniforms.cornerRadius, adjustedCornerRadius)
+    this.gl.uniform4fv(shader.uniforms.borderColor, outlineColor as Float32List)
+    this.gl.uniform4fv(shader.uniforms.fillColor, fillColor as Float32List)
+    this.gl.uniform2fv(shader.uniforms.canvasWidthHeight, [this.gl.canvas.width, this.gl.canvas.height])
+    this.gl.uniform4fv(shader.uniforms.leftTopWidthHeight, rectParams as Float32List)
+    this.gl.bindVertexArray(UIKRenderer.genericVAO)
+    this.gl.drawArrays(this.gl.TRIANGLE_STRIP, 0, 4)
+    this.gl.bindVertexArray(null)
+  }
+
+  /**
+   * Draws a rectangle.
+   * @param config - Configuration object containing:
+   *   - leftTopWidthHeight: The bounding box of the rectangle (left, top, width, height).
+   *   - lineColor: The color of the rectangle. Defaults to red ([1, 0, 0, -1]).
+   */
+  public drawRect({
+    leftTopWidthHeight,
+    fillColor = [0, 0, 0, 0]
+  }: {
+    leftTopWidthHeight: Vec4
+    fillColor?: Color
+  }): void {
+    this.drawRoundedRect({
+      bounds: [leftTopWidthHeight[0], leftTopWidthHeight[1], leftTopWidthHeight[2], leftTopWidthHeight[3]],
+      outlineColor: [0, 0, 0, 0],
+      fillColor,
+      cornerRadius: 0,
+      thickness: 0
+    })
+  }
+
   
   /**
    * Draws a circle.
@@ -705,5 +775,129 @@ export class UIKRenderer {
     }
   }
 
+  /**
+   * Draws a line graph based on provided Graph settings.
+   * @param params - Object containing settings for rendering the graph.
+   */
+  public drawLineGraph({
+    position,
+    size,
+    backgroundColor,
+    lineColor,
+    axisColor,
+    data,
+    xLabel,
+    yLabel,
+    yRange,
+    lineThickness = 2,
+    textColor,
+    font,
+    textScale = 1
+  }: {
+    position: Vec2
+    size: Vec2
+    backgroundColor: Color
+    lineColor: Color
+    axisColor: Color
+    data: number[]
+    xLabel?: string
+    yLabel?: string
+    yRange?: [number, number]
+    lineThickness?: number
+    textColor: Color
+    font: UIKFont
+    textScale?: number
+  }): void {
+    const gl = this.gl
+  
+    // background
+    this.drawRect({ leftTopWidthHeight: [position[0], position[1], size[0], size[1]], fillColor: backgroundColor })
+  
+    // compute y-axis range
+    const [minY, maxY] = yRange ?? [Math.min(...data), Math.max(...data)]
+  
+    // measure widest y-tick label
+    const tickCount = 5
+    const tickSpacing = size[1] / tickCount
+    const yValueSpacing = (maxY - minY) / tickCount
+  
+    let maxTextWid = 0
+    for (let i = 0; i <= tickCount; i++) {
+      const val = (minY + i * yValueSpacing).toFixed(2)
+      maxTextWid = Math.max(maxTextWid, font.getTextWidth(val, textScale))
+    }
+  
+    // dynamic margins
+    const leftMargin   = maxTextWid + 12
+    const bottomMargin = font.getTextHeight(xLabel || 'label', textScale) + 12
+    const rightMargin  = size[0] * 0.05
+    const topMargin    = size[1] * 0.05
+  
+    const plotPos: Vec2 = [ position[0] + leftMargin,         position[1] + topMargin ]
+    const plotSize: Vec2 = [
+      size[0] - leftMargin - rightMargin,
+      size[1] - topMargin  - bottomMargin
+    ]
+  
+    // draw axes
+    this.drawLine({ startEnd: [plotPos[0], plotPos[1], plotPos[0], plotPos[1]+plotSize[1]], thickness: 1, color: axisColor })
+    this.drawLine({ startEnd: [plotPos[0], plotPos[1]+plotSize[1], plotPos[0]+plotSize[0], plotPos[1]+plotSize[1]], thickness: 1, color: axisColor })
+  
+    // draw y-ticks & labels
+    for (let i = 0; i <= tickCount; i++) {
+      const y = plotPos[1] + plotSize[1] - i * tickSpacing
+      const val = (minY + i * yValueSpacing).toFixed(2)
+      this.drawLine({ startEnd: [plotPos[0]-5, y, plotPos[0], y], thickness: 1, color: axisColor })
+      this.drawRotatedText({
+        font,
+        xy: [plotPos[0]-8, y],
+        str: val,
+        scale: textScale,
+        color: textColor,
+        rotation: -Math.PI/2
+      })
+    }
+  
+    // draw x-ticks & labels
+    const xTickCount = Math.min(data.length, 10)
+    const xSpacing = plotSize[0] / xTickCount
+    for (let i = 0; i <= xTickCount; i++) {
+      const x = plotPos[0] + i * xSpacing
+      const lbl = xLabel && i===xTickCount/2 ? xLabel : (i * Math.floor(data.length/xTickCount)).toString()
+      this.drawLine({ startEnd: [x, plotPos[1]+plotSize[1], x, plotPos[1]+plotSize[1]+5], thickness: 1, color: axisColor })
+      if (i===0 || i===xTickCount || lbl===xLabel) {
+        this.drawRotatedText({
+          font,
+          xy: [x, plotPos[1]+plotSize[1]+8],
+          str: lbl,
+          scale: textScale,
+          color: textColor
+        })
+      }
+    }
+  
+    // plot data line
+    UIKRenderer.lineShader.use(gl)
+    gl.enable(gl.BLEND)
+    gl.uniform4fv(UIKRenderer.lineShader.uniforms.lineColor, lineColor as Float32List)
+    gl.uniform2fv(UIKRenderer.lineShader.uniforms.canvasWidthHeight, [gl.canvas.width, gl.canvas.height])
+    gl.uniform1f(UIKRenderer.lineShader.uniforms.thickness, lineThickness)
+  
+    const pts = new Float32Array((data.length)*4)
+    data.forEach((val, i) => {
+      const x = plotPos[0] + (i/(data.length-1))*plotSize[0]
+      const y = plotPos[1] + plotSize[1] - ((val-minY)/(maxY-minY))*plotSize[1]
+      pts.set([ x, y, x, y ], i*4)  // will be used in TRIANGLE_STRIP
+    })
+  
+    const buf = gl.createBuffer()!
+    gl.bindBuffer(gl.ARRAY_BUFFER, buf)
+    gl.bufferData(gl.ARRAY_BUFFER, pts, gl.STATIC_DRAW)
+    gl.enableVertexAttribArray(0)
+    gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 0, 0)
+    gl.drawArrays(gl.LINE_STRIP, 0, data.length)
+    gl.bindVertexArray(null)
+  }
+  
 
 }

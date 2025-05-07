@@ -25,7 +25,7 @@ export default defineConfig({
       format: 'es'
     },
     optimizeDeps: {
-      exclude: ['@niivue/niivue', '@niivue/niimath', '@niivue/dcm2niix']
+      exclude: ['@niivue/niivue', '@niivue/niimath', '@niivue/dcm2niix', "@niivue/uikit"]
     },
     build: {
       commonjsOptions: {
